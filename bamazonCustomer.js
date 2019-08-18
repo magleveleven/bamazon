@@ -11,47 +11,36 @@ var connection = mysql.createConnection({
 
 connection.connect(function(err) {
     console.log("Connected as id: "+connection.threadId);
-    start();
-})
+ })
 
 var start = function(){
-    inquirer.prompt({
-        name: "viewOrBuy",
-        type: "rawlist",
-        message: "Would you like to VIEW inventory or BUY product?",
-        choices: ["VIEW", "BUY"]
-    }).then(function(answer){
-        if(answer.viewOrBuy.toUpperCase()=="VIEW"){
-            showInventory();
-        }
-        else {
-            buyProduct();
-        }
-    })
+connection.query("SELECT * FROM products", function(err, res){
+    console.table(res);
+    buyProduct();
+});
+
+var end = function (){
+    console.log("Goodbye!")
+    connection.end();
 }
 
-var showInventory = function() {
-    connection.query("SELECT * FROM products",  function(err,rows){
-        if(err) {
-            console.log(err);
-            return;}
-        //console.log(res);
-        rows.forEach(function(res) {
-            console.log(res.id, res.product_name, res.department_name, res.price, res.quantity)})
-            inquirer.prompt({
-                name: "enterIDtoBuy",
-                type: "input",
-                message: "Enter the ID of the product you would like to purchase.",
-                validate: function(value){
-                    if(isNaN(value)==false){
-                        return true;
-                    }
-                    else {
-                        return false;
-                    }}
-            }).then(function(answer){
-                console.log(answer);
-                inquirer.prompt({
+var buyProduct = function() {
+            inquirer.prompt([
+                {
+                    name: "id",
+                    type: "input",
+                    message: "Enter the ID # of the product you'd  like to purchase.",
+                    validate: function (value) {
+                        if(isNaN(value) === false){
+                            return true;
+                        }
+                        else {
+                            return false;
+                 
+                        }
+                }
+                },
+                {
                     name: "enterQuantity",
                     type: "input",
                     message: "And how many you would like to purchase?",
@@ -62,46 +51,49 @@ var showInventory = function() {
                         else {
                             return false;
                         }
-                    }
-                })
-            })
-        })
-}
+                }
+            }
+        ]).then(function(answer){
 
-var buyProduct = function() {
-    connection.query("SELECT * FROM products",  function(err,rows){
-        if(err) {
-            console.log(err);
-            return;}
-        //rows.forEach(function(res) {
-            //console.log(res.id, res.product_name, res.department_name, res.price, res.quantity);
-            inquirer.prompt({
-                name: "enterIDtoBuy",
-                type: "input",
-                message: "Enter the ID of the product you would like to purchase.",
-                validate: function(value){
-                    if(isNaN(value)==false){
-                        return true;
-                    }
-                    else {
-                        return false;
+            connection.query("SELECT quantity FROM products WHERE ? ", [
+                {
+                    id: answer.id
+                }
+            ], function(err,res) { //Need to fix the quantity updater , it's not working
+                var currentInventory = res[0].quantity;
+                if(currentInventory < answer.quantity) {
+                    console.log("Unfortunately, we don't have that amount available.");
+                    end();
+                }
+                else {
+                    connection.query("UPDATE products SET ? WHERE ?", [
+                        {
+                            quantity: currentInventory - answer.quantity,
+                        }, {
+                            product_name: answer.product_name
+                        }
+                    ],
+                    function (err, res){
+                        inquirer.prompt({
+                            type: "list",
+                            message: "Do you want to BUY more or EXIT?",
+                            choices: ["BUY", "EXIT"],
+                            name: "keepGoing"
+                        }).then(function(answer) {
+                            switch(answer.keepGoing) {
+                                case "BUY":
+                                    start();
+                                    break;
+                                case "EXIT":
+                                    end();
+                                }
+                            })
+                        }
+                        )
                     }
                 }
+                )
             })
-            .then(function(answer){
-            console.log(answer);
-            inquirer.prompt({
-                name: "enterQuantity",
-                type: "input",
-                message: "And how many you would like to purchase?",
-                validate: function(value){
-                    if(isNaN(value)==false){
-                        return true;
-                    }
-                    else {
-                        return false;
-                    }}
-                })
-            })
-        })
-}
+        }}
+
+start();
